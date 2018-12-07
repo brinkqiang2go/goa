@@ -519,11 +519,7 @@ func (e *HTTPEndpointExpr) Finalize() {
 		e.Body.Finalize()
 	}
 
-	if e.Body != nil && e.Body.Type != Empty && IsObject(e.Body.Type) {
-		ma := NewMappedAttributeExpr(e.Body)
-		init(ma)
-		e.Body = ma.AttributeExpr
-	} else {
+	if e.Body == nil {
 		// No explicit body, compute it
 		e.Body = httpRequestBody(e)
 	}
