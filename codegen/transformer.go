@@ -14,10 +14,6 @@ type (
 		// target attribute. It returns an error if source and target are not
 		// compatible for transformation.
 		TransformAttribute(source, target AttributeAnalyzer, ta *TransformAttrs) (code string, err error)
-		// TransformPrimitive returns the code to transform source attribute of
-		// primitve type to target attribute of primitive type. It returns an error
-		// if source and target are not compatible for transformation.
-		TransformPrimitive(source, target AttributeAnalyzer, ta *TransformAttrs) (code string, err error)
 		// TransformObject returns the code to transform source attribute of object
 		// type to target attribute of object type. It returns an error if source
 		// and target are not compatible for transformation.

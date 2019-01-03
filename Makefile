@@ -17,14 +17,21 @@ DIRS=$(shell go list -f {{.Dir}} goa.design/goa/expr/...)
 DEPEND=\
 	github.com/sergi/go-diff/diffmatchpatch \
 	golang.org/x/lint/golint \
-	golang.org/x/tools/cmd/goimports
+	golang.org/x/tools/cmd/goimports \
+	github.com/golang/protobuf/protoc-gen-go
 
 all: lint gen test
 
 travis: depend all
 
+PROTOC_ZIP = protoc-3.3.0-linux-x86_64.zip
 depend:
+	# Install protoc
+	@curl -s -OL https://github.com/google/protobuf/releases/download/v3.3.0/$(PROTOC_ZIP) && \
+		sudo unzip -o $(PROTOC_ZIP) -d /usr/local bin/protoc && \
+		rm -f $(PROTOC_ZIP)
 	@go get -v $(DEPEND)
+	@go install github.com/golang/protobuf/protoc-gen-go
 	@go get -t -v ./...
 
 lint:
@@ -40,21 +47,21 @@ lint:
 gen:
 	@cd cmd/goa && \
 	go install && \
-	rm -rf $(GOPATH)/src/goa.design/goa/examples/calc/cmd              && \
+	rm -rf $(GOPATH)/src/goa.design/goa/examples/basic/cmd             && \
 	rm -rf $(GOPATH)/src/goa.design/goa/examples/cellar/cmd/cellar-cli && \
-	rm -rf $(GOPATH)/src/goa.design/goa/examples/chatter/cmd/chatter   && \
 	rm -rf $(GOPATH)/src/goa.design/goa/examples/error/cmd             && \
 	rm -rf $(GOPATH)/src/goa.design/goa/examples/security/cmd          && \
-	goa gen     goa.design/goa/examples/calc/design     -o $(GOPATH)/src/goa.design/goa/examples/calc     && \
-	goa example goa.design/goa/examples/calc/design     -o $(GOPATH)/src/goa.design/goa/examples/calc     && \
-	goa gen     goa.design/goa/examples/cellar/design   -o $(GOPATH)/src/goa.design/goa/examples/cellar   && \
-	goa example goa.design/goa/examples/cellar/design   -o $(GOPATH)/src/goa.design/goa/examples/cellar   && \
-	goa gen     goa.design/goa/examples/chatter/design  -o $(GOPATH)/src/goa.design/goa/examples/chatter  && \
-	goa example goa.design/goa/examples/chatter/design  -o $(GOPATH)/src/goa.design/goa/examples/chatter  && \
-	goa gen     goa.design/goa/examples/error/design    -o $(GOPATH)/src/goa.design/goa/examples/error    && \
-	goa example goa.design/goa/examples/error/design    -o $(GOPATH)/src/goa.design/goa/examples/error    && \
-	goa gen     goa.design/goa/examples/security/design -o $(GOPATH)/src/goa.design/goa/examples/security && \
-	goa example goa.design/goa/examples/security/design -o $(GOPATH)/src/goa.design/goa/examples/security
+	rm -rf $(GOPATH)/src/goa.design/goa/examples/streaming/cmd/chatter && \
+	goa gen     goa.design/goa/examples/basic/design     -o $(GOPATH)/src/goa.design/goa/examples/basic     && \
+	goa example goa.design/goa/examples/basic/design     -o $(GOPATH)/src/goa.design/goa/examples/basic     && \
+	goa gen     goa.design/goa/examples/cellar/design    -o $(GOPATH)/src/goa.design/goa/examples/cellar   && \
+	goa example goa.design/goa/examples/cellar/design    -o $(GOPATH)/src/goa.design/goa/examples/cellar   && \
+	goa gen     goa.design/goa/examples/error/design     -o $(GOPATH)/src/goa.design/goa/examples/error    && \
+	goa example goa.design/goa/examples/error/design     -o $(GOPATH)/src/goa.design/goa/examples/error    && \
+	goa gen     goa.design/goa/examples/security/design  -o $(GOPATH)/src/goa.design/goa/examples/security && \
+	goa example goa.design/goa/examples/security/design  -o $(GOPATH)/src/goa.design/goa/examples/security && \
+	goa gen     goa.design/goa/examples/streaming/design -o $(GOPATH)/src/goa.design/goa/examples/streaming  && \
+	goa example goa.design/goa/examples/streaming/design -o $(GOPATH)/src/goa.design/goa/examples/streaming
 
 test:
 	go test ./...

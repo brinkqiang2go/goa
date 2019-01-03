@@ -17,9 +17,9 @@ type (
 )
 
 // newProtoBufAnalyzer returns an attribute analyzer for protocol buffer types.
-func newProtoBufAnalyzer(att *expr.AttributeExpr, required bool, pkg string, scope *codegen.NameScope) codegen.AttributeAnalyzer {
+func newProtoBufAnalyzer(att *expr.AttributeExpr, pkg string, scope *codegen.NameScope) codegen.AttributeAnalyzer {
 	return &protobufAnalyzer{
-		Analyzer: codegen.NewAttributeAnalyzer(att, required, false, false, true, pkg, scope).(*codegen.Analyzer),
+		Analyzer: codegen.NewAttributeAnalyzer(att, true, false, false, true, pkg, scope).(*codegen.Analyzer),
 	}
 }
 
@@ -44,6 +44,10 @@ func (p *protobufAnalyzer) Ref(withPkg bool) string {
 		return protoBufGoFullTypeRef(p.Attribute(), p.PkgName, p.Scope)
 	}
 	return protoBufGoTypeRef(p.Attribute(), p.Scope)
+}
+
+func (p *protobufAnalyzer) Def() string {
+	return protoBufMessageDef(p.Attribute(), p.Scope)
 }
 
 func (p *protobufAnalyzer) Identifier(name string, firstUpper bool) string {
@@ -203,7 +207,7 @@ func protoBufFullMessageName(att *expr.AttributeExpr, pkg string, s *codegen.Nam
 	case expr.CompositeExpr:
 		return protoBufFullMessageName(actual.Attribute(), pkg, s)
 	default:
-		panic(fmt.Sprintf("data type is not a user type %T", actual)) // bug
+		panic(fmt.Sprintf("data type is not a user type: received type %T", actual)) // bug
 	}
 }
 

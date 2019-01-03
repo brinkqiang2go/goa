@@ -54,25 +54,6 @@ func (g *GoTransformer) TransformAttribute(source, target AttributeAnalyzer, ta 
 	return GoAttributeTransform(source, target, ta, g)
 }
 
-// TransformPrimitive returns the code to transform source attribute of
-// primitve type to target attribute of primitive type. It returns an error
-// if source and target are not compatible for transformation.
-func (g *GoTransformer) TransformPrimitive(source, target AttributeAnalyzer, ta *TransformAttrs) (string, error) {
-	var code string
-	assign := "="
-	if ta.NewVar {
-		assign = ":="
-	}
-	if _, ok := target.Attribute().Type.(expr.UserType); ok {
-		// Primitive user type, these are used for error results
-		cast := target.Ref(true)
-		return fmt.Sprintf("%s %s %s(%s)\n", ta.TargetVar, assign, cast, ta.SourceVar), nil
-	}
-	srcField, _ := g.ConvertType(ta.SourceVar, source.Attribute().Type)
-	code = fmt.Sprintf("%s %s %s\n", ta.TargetVar, assign, srcField)
-	return code, nil
-}
-
 // TransformObject returns the code to transform source attribute of object
 // type to target attribute of object type. It returns an error if source
 // and target are not compatible for transformation.
@@ -155,7 +136,17 @@ func GoAttributeTransform(source, target AttributeAnalyzer, ta *TransformAttrs, 
 		case expr.IsObject(sourceType):
 			code, err = t.TransformObject(source, target, ta)
 		default:
-			code, err = t.TransformPrimitive(source, target, ta)
+			assign := "="
+			if ta.NewVar {
+				assign = ":="
+			}
+			if _, ok := target.Attribute().Type.(expr.UserType); ok {
+				// Primitive user type, these are used for error results
+				cast := target.Ref(true)
+				return fmt.Sprintf("%s %s %s(%s)\n", ta.TargetVar, assign, cast, ta.SourceVar), nil
+			}
+			srcField, _ := t.ConvertType(ta.SourceVar, source.Attribute().Type)
+			code = fmt.Sprintf("%s %s %s\n", ta.TargetVar, assign, srcField)
 		}
 	}
 	if err != nil {
@@ -254,7 +245,6 @@ func GoObjectTransform(source, target AttributeAnalyzer, ta *TransformAttrs, t T
 			_, ok := srccAtt.Type.(expr.UserType)
 			switch {
 			case expr.IsArray(srccAtt.Type):
-
 				code, err = t.TransformArray(srcc, tgtc, newTA)
 			case expr.IsMap(srccAtt.Type):
 				code, err = t.TransformMap(srcc, tgtc, newTA)

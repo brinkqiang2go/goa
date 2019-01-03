@@ -154,7 +154,7 @@ func TestProtoBufTransform(t *testing.T) {
 func newProtoAnalyzer(dt expr.DataType, pkg string, scope *codegen.NameScope) codegen.AttributeAnalyzer {
 	att := &expr.AttributeExpr{Type: expr.Dup(dt)}
 	makeProtoBufMessage(att, dt.Name(), scope)
-	return newProtoBufAnalyzer(att, true, pkg, scope)
+	return newProtoBufAnalyzer(att, pkg, scope)
 }
 
 const (

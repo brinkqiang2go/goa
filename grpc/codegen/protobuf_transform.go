@@ -46,44 +46,15 @@ func protoBufTransform(source, target codegen.AttributeAnalyzer, sourceVar, targ
 // compatible for transformation.
 func (p *protoBufTransformer) TransformAttribute(source, target codegen.AttributeAnalyzer, ta *codegen.TransformAttrs) (string, error) {
 	var (
-		code string
+		init string
 		err  error
 
-		sourceType = source.Attribute().Type
-		targetType = target.Attribute().Type
+		srcAtt = source.Attribute()
+		tgtAtt = target.Attribute()
 	)
-	{
-		switch {
-		case expr.IsArray(sourceType):
-			code, err = p.TransformArray(source, target, ta)
-		case expr.IsMap(sourceType):
-			code, err = p.TransformMap(source, target, ta)
-		case expr.IsObject(sourceType):
-			if expr.IsPrimitive(targetType) {
-				code, err = p.TransformPrimitive(source, target, ta)
-			} else {
-				code, err = p.TransformObject(source, target, ta)
-			}
-		default:
-			code, err = p.TransformPrimitive(source, target, ta)
-		}
-	}
-	if err != nil {
-		return "", err
-	}
-	return code, nil
-}
-
-// TransformPrimitive returns the code to transform source attribute of
-// primitive type to target attribute of primitive type. It returns an error
-// if source and target are not compatible for transformation.
-func (p *protoBufTransformer) TransformPrimitive(source, target codegen.AttributeAnalyzer, ta *codegen.TransformAttrs) (string, error) {
-	var code string
-	srcAtt := source.Attribute()
-	tgtAtt := target.Attribute()
 	if err := codegen.IsCompatible(srcAtt.Type, tgtAtt.Type, ta.SourceVar, ta.TargetVar); err != nil {
 		if p.proto {
-			code += fmt.Sprintf("%s := &%s{}\n", ta.TargetVar, target.Name(true))
+			init += fmt.Sprintf("%s := &%s{}\n", ta.TargetVar, target.Name(true))
 			ta.TargetVar += ".Field"
 			ta.NewVar = false
 			tgtAtt = unwrapAttr(expr.DupAtt(tgtAtt))
@@ -94,14 +65,43 @@ func (p *protoBufTransformer) TransformPrimitive(source, target codegen.Attribut
 		if err = codegen.IsCompatible(srcAtt.Type, tgtAtt.Type, ta.SourceVar, ta.TargetVar); err != nil {
 			return "", err
 		}
+		source = source.Dup(srcAtt, true)
+		target = target.Dup(tgtAtt, true)
 	}
-	assign := "="
-	if ta.NewVar {
-		assign = ":="
+	var (
+		code string
+
+		sourceType = source.Attribute().Type
+		targetType = target.Attribute().Type
+	)
+	{
+		primitive := func(source, target codegen.AttributeAnalyzer, ta *codegen.TransformAttrs) string {
+			assign := "="
+			if ta.NewVar {
+				assign = ":="
+			}
+			srcField, _ := p.ConvertType(ta.SourceVar, source.Attribute().Type)
+			return fmt.Sprintf("%s %s %s\n", ta.TargetVar, assign, srcField)
+		}
+		switch {
+		case expr.IsArray(sourceType):
+			code, err = p.TransformArray(source, target, ta)
+		case expr.IsMap(sourceType):
+			code, err = p.TransformMap(source, target, ta)
+		case expr.IsObject(sourceType):
+			if expr.IsPrimitive(targetType) {
+				code = primitive(source, target, ta)
+			} else {
+				code, err = p.TransformObject(source, target, ta)
+			}
+		default:
+			code = primitive(source, target, ta)
+		}
 	}
-	srcField, _ := p.ConvertType(ta.SourceVar, srcAtt.Type)
-	code += fmt.Sprintf("%s %s %s\n", ta.TargetVar, assign, srcField)
-	return code, nil
+	if err != nil {
+		return "", err
+	}
+	return init + code, nil
 }
 
 // TransformObject returns the code to transform source attribute of object
