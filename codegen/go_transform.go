@@ -447,7 +447,7 @@ func GoTransformHelpers(source, target AttributeAnalyzer, t Transformer, seen ..
 			}
 		case expr.IsObject(sourceType):
 			walkMatches(source, target, func(srcMatt, tgtMatt *expr.MappedAttributeExpr, srcc, tgtc AttributeAnalyzer, n string) {
-				if err != nil {
+				if srcc, tgtc, ta, err = t.MakeCompatible(srcc, tgtc, ta, ""); err != nil {
 					return
 				}
 				if srcc, tgtc, ta, err = t.MakeCompatible(srcc, tgtc, ta, ""); err != nil {
