@@ -61,7 +61,7 @@ func handleGRPCServer(ctx context.Context, u *url.URL, securedServiceEndpoints *
 			if err != nil {
 				errc <- err
 			}
-			logger.Printf("listening on %q", u.Host)
+			logger.Printf("gRPC server listening on %q", u.Host)
 			errc <- srv.Serve(lis)
 		}()
 

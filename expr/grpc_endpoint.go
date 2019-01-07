@@ -381,7 +381,7 @@ func validateRPCTags(fields *Object, e *GRPCEndpointExpr) *eval.ValidationErrors
 		if tag, ok := nat.Attribute.Meta["rpc:tag"]; !ok {
 			verr.Add(e, "attribute %q does not have \"rpc:tag\" defined in the meta", nat.Name)
 		} else if a, ok := foundRPC[tag[0]]; ok {
-			verr.Add(e, "field number %d in attribute %q already exists for attribute %q", tag[0], nat.Name, a)
+			verr.Add(e, "field number %s in attribute %q already exists for attribute %q", tag[0], nat.Name, a)
 		} else {
 			foundRPC[tag[0]] = nat.Name
 		}

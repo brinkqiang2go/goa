@@ -72,7 +72,7 @@ func main() {
 		case "grpc", "grpcs":
 			endpoint, payload, err = doGRPC(scheme, host, timeout, debug)
 		default:
-			fmt.Fprintf(os.Stderr, "invalid scheme: %q (valid schemes: grpc|http)", scheme)
+			fmt.Fprintf(os.Stderr, "invalid scheme: %q (valid schemes: grpc|grpcs|http|https)", scheme)
 			os.Exit(1)
 		}
 	}

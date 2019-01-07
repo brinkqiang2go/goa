@@ -18,19 +18,33 @@ DEPEND=\
 	github.com/sergi/go-diff/diffmatchpatch \
 	golang.org/x/lint/golint \
 	golang.org/x/tools/cmd/goimports \
+	github.com/hashicorp/go-getter \
 	github.com/golang/protobuf/protoc-gen-go
 
 all: lint gen test
 
 travis: depend all
 
-PROTOC_ZIP = protoc-3.3.0-linux-x86_64.zip
+# Install protoc
+GOOS=$(shell go env GOOS)
+PROTOC_VERSION="3.6.1"
+ifeq ($(GOOS),linux)
+PROTOC="protoc-$(PROTOC_VERSION)-linux-x86_64"
+PROTOC_EXEC="$(PROTOC)/bin/protoc"
+GOBIN="$(GOPATH)/bin"
+else
+	ifeq ($(GOOS),windows)
+PROTOC="protoc-$(PROTOC_VERSION)-win32"
+PROTOC_EXEC="$(PROTOC)\bin\protoc.exe"
+GOBIN="$(GOPATH)\bin"
+	endif
+endif
 depend:
-	# Install protoc
-	@curl -s -OL https://github.com/google/protobuf/releases/download/v3.3.0/$(PROTOC_ZIP) && \
-		sudo unzip -o $(PROTOC_ZIP) -d /usr/local bin/protoc && \
-		rm -f $(PROTOC_ZIP)
 	@go get -v $(DEPEND)
+	@go install github.com/hashicorp/go-getter/cmd/go-getter && \
+		go-getter https://github.com/google/protobuf/releases/download/v$(PROTOC_VERSION)/$(PROTOC).zip $(PROTOC) && \
+		cp $(PROTOC_EXEC) $(GOBIN) && \
+		rm -r $(PROTOC)
 	@go install github.com/golang/protobuf/protoc-gen-go
 	@go get -t -v ./...
 
