@@ -284,11 +284,12 @@ func (e *GRPCEndpointExpr) Finalize() {
 			}
 		}
 	} else {
-		// method payload is not an object type. Initialize request metadata if
-		// defined or if endpoint defines streaming payload. Else initialize
-		// request message.
-		if !e.Metadata.IsEmpty() || e.MethodExpr.StreamingPayload.Type != Empty {
-			initAttrFromDesign(e.Metadata.AttributeExpr, e.MethodExpr.Payload)
+		// method payload is not an object type.
+		if e.MethodExpr.StreamingPayload.Type != Empty {
+			// endpoint defines streaming payload. So add the method payload to
+			// request metadata under "goa-payload" field
+			e.Metadata.Type.(*Object).Set("goa_payload", e.MethodExpr.Payload)
+			e.Metadata.Validation.AddRequired("goa_payload")
 		} else {
 			initAttrFromDesign(e.Request, e.MethodExpr.Payload)
 		}

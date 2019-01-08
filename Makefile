@@ -19,6 +19,7 @@ DEPEND=\
 	golang.org/x/lint/golint \
 	golang.org/x/tools/cmd/goimports \
 	github.com/hashicorp/go-getter \
+	github.com/cheggaaa/pb \
 	github.com/golang/protobuf/protoc-gen-go
 
 all: lint gen test

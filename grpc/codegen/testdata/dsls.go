@@ -52,6 +52,23 @@ var UnaryRPCNoResultDSL = func() {
 	})
 }
 
+var UnaryRPCWithErrorsDSL = func() {
+	Service("ServiceUnaryRPCWithErrorsNoResult", func() {
+		Method("MethodUnaryRPCWithErrorsNoResult", func() {
+			Payload(String)
+			Result(String)
+			Error("timeout")
+			Error("internal")
+			Error("bad_request")
+			GRPC(func() {
+				Response("timeout", CodeCanceled)
+				Response("internal", CodeUnknown)
+				Response("bad_request", CodeInvalidArgument)
+			})
+		})
+	})
+}
+
 var ServerStreamingRPCDSL = func() {
 	Service("ServiceServerStreamingRPC", func() {
 		Method("MethodServerStreamingRPC", func() {
@@ -62,11 +79,112 @@ var ServerStreamingRPCDSL = func() {
 	})
 }
 
+var ServerStreamingUserTypeDSL = func() {
+	var UT = Type("UserType", func() {
+		Attribute("IntField", Int)
+	})
+	Service("ServiceServerStreamingUserTypeRPC", func() {
+		Method("MethodServerStreamingUserTypeRPC", func() {
+			StreamingResult(UT)
+			GRPC(func() {})
+		})
+	})
+}
+
+var ServerStreamingArrayDSL = func() {
+	Service("ServiceServerStreamingArray", func() {
+		Method("MethodServerStreamingArray", func() {
+			StreamingResult(ArrayOf(Int))
+			GRPC(func() {})
+		})
+	})
+}
+
+var ServerStreamingMapDSL = func() {
+	var UT = Type("UserType", func() {
+		Attribute("IntField", Int)
+	})
+	Service("ServiceServerStreamingMap", func() {
+		Method("MethodServerStreamingMap", func() {
+			StreamingResult(MapOf(String, UT))
+			GRPC(func() {})
+		})
+	})
+}
+
+var ServerStreamingResultWithViewsDSL = func() {
+	var RT = ResultType("application/vnd.result", func() {
+		TypeName("ResultType")
+		Attributes(func() {
+			Attribute("IntField", Int)
+			Attribute("DoubleField", Float64)
+		})
+		View("default", func() {
+			Attribute("IntField")
+			Attribute("DoubleField")
+		})
+		View("tiny", func() {
+			Attribute("IntField")
+		})
+	})
+	Service("ServiceServerStreamingUserTypeRPC", func() {
+		Method("MethodServerStreamingUserTypeRPC", func() {
+			StreamingResult(RT)
+			GRPC(func() {})
+		})
+	})
+}
+
+var ServerStreamingResultCollectionWithExplicitViewDSL = func() {
+	var RT = ResultType("application/vnd.result", func() {
+		TypeName("ResultType")
+		Attributes(func() {
+			Attribute("IntField", Int)
+			Attribute("DoubleField", Float64)
+		})
+		View("default", func() {
+			Attribute("IntField")
+			Attribute("DoubleField")
+		})
+		View("tiny", func() {
+			Attribute("IntField")
+		})
+	})
+	Service("ServiceServerStreamingResultTypeCollectionWithExplicitView", func() {
+		Method("MethodServerStreamingResultTypeCollectionWithExplicitView", func() {
+			StreamingResult(CollectionOf(RT), func() {
+				View("tiny")
+			})
+			GRPC(func() {})
+		})
+	})
+}
+
 var ClientStreamingRPCDSL = func() {
 	Service("ServiceClientStreamingRPC", func() {
 		Method("MethodClientStreamingRPC", func() {
 			StreamingPayload(Int)
 			Result(String)
+			GRPC(func() {})
+		})
+	})
+}
+
+var ClientStreamingRPCWithPayloadDSL = func() {
+	Service("ServiceClientStreamingRPCWithPayload", func() {
+		Method("MethodClientStreamingRPCWithPayload", func() {
+			Payload(Int)
+			StreamingPayload(Int)
+			Result(String)
+			GRPC(func() {})
+		})
+	})
+}
+
+var ClientStreamingNoResultDSL = func() {
+	Service("ServiceClientStreamingNoResult", func() {
+		Method("MethodClientStreamingNoResult", func() {
+			StreamingPayload(Int)
 			GRPC(func() {})
 		})
 	})
@@ -84,6 +202,38 @@ var BidirectionalStreamingRPCDSL = func() {
 			StreamingPayload(Int)
 			StreamingResult(RT)
 			GRPC(func() {})
+		})
+	})
+}
+
+var BidirectionalStreamingRPCWithPayloadDSL = func() {
+	var PT = Type("Payload", func() {
+		Field(1, "a", Int)
+		Field(2, "b", String)
+	})
+	Service("ServiceBidirectionalStreamingRPCWithPayload", func() {
+		Method("MethodBidirectionalStreamingRPCWithPayload", func() {
+			Payload(PT)
+			StreamingPayload(Int)
+			StreamingResult(UInt)
+			GRPC(func() {})
+		})
+	})
+}
+
+var BidirectionalStreamingRPCWithErrorsDSL = func() {
+	Service("ServiceBidirectionalStreamingRPCWithErrors", func() {
+		Method("MethodBidirectionalStreamingRPCWithErrors", func() {
+			StreamingPayload(Int)
+			StreamingResult(Int)
+			Error("timeout")
+			Error("internal")
+			Error("bad_request")
+			GRPC(func() {
+				Response("timeout", CodeCanceled)
+				Response("internal", CodeUnknown)
+				Response("bad_request", CodeInvalidArgument)
+			})
 		})
 	})
 }

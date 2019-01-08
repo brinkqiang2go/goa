@@ -230,7 +230,7 @@ func New{{ .Method.VarName }}Handler(endpoint goa.Endpoint, h goagrpc.{{ if .Ser
 const serverGRPCInterfaceT = `{{ printf "%s implements the %q method in %s.%s interface." .Method.VarName .Method.VarName .PkgName .ServerInterface | comment }}
 func (s *{{ .ServerStruct }}) {{ .Method.VarName }}(
 	{{- if not .ServerStream }}ctx context.Context, {{ end }}
-	{{- if not .Method.StreamingPayload }}message {{ .Request.Message.Ref }},{{ end }}
+	{{- if not .Method.StreamingPayload }}message {{ .Request.Message.Ref }}{{ if .ServerStream }}, {{ end }}{{ end }}
 	{{- if .ServerStream }}stream {{ .ServerStream.Interface }}{{ end }}) {{ if .ServerStream }}error{{ else if .Response.Message }}({{ .Response.Message.Ref }},	error{{ if .Response.Message }}){{ end }}{{ end }} {
 {{- if .ServerStream }}
 	p, err := s.{{ .Method.VarName }}H.Decode(stream.Context(), {{ if .Method.StreamingPayload }}nil{{ else }}message{{ end }})
@@ -336,7 +336,7 @@ func Decode{{ .Method.VarName }}Request(ctx context.Context, v interface{}, md m
 	{{- end }}
 	}
 {{- end }}
-{{- if not .Method.StreamingPayload }}
+{{- if .Request.ServerConvert }}
 	var (
 		message {{ .Request.ServerConvert.SrcRef }}
 		ok bool
@@ -360,7 +360,11 @@ func Decode{{ .Method.VarName }}Request(ctx context.Context, v interface{}, md m
 	{{- end }}
 	)
 	{
-		payload = {{ .Request.ServerConvert.Init.Name }}({{ range .Request.ServerConvert.Init.Args }}{{ .Name }}, {{ end }})
+		{{- if .Request.ServerConvert }}
+			payload = {{ .Request.ServerConvert.Init.Name }}({{ range .Request.ServerConvert.Init.Args }}{{ .Name }}, {{ end }})
+		{{- else }}
+			payload = {{ (index .Request.Metadata 0).VarName }}
+		{{- end }}
 {{- range .MetadataSchemes }}
 	{{- if ne .Type "Basic" }}
 		{{- if not .CredRequired }}
@@ -390,7 +394,7 @@ func Encode{{ .Method.VarName }}Response(ctx context.Context, v interface{}, hdr
 		return nil, goagrpc.ErrInvalidType("{{ .ServiceName }}", "{{ .Method.Name }}", "{{ .ViewedResultRef }}", v)
 	}
 	result := vres.Projected
-	*hdr.Append("goa-view", vres.View)
+	(*hdr).Append("goa-view", vres.View)
 {{- else }}
 	result, ok := v.({{ .ResultRef }})
 	if !ok {
@@ -399,10 +403,10 @@ func Encode{{ .Method.VarName }}Response(ctx context.Context, v interface{}, hdr
 {{- end }}
 	resp := {{ .Response.ServerConvert.Init.Name }}({{ range .Response.ServerConvert.Init.Args }}{{ .Name }}, {{ end }})
 {{- range .Response.Headers }}
-	{{ template "metadata_encoder" (metadataEncodeDecodeData . "*hdr") }}
+	{{ template "metadata_encoder" (metadataEncodeDecodeData . "(*hdr)") }}
 {{- end }}
 {{- range .Response.Trailers }}
-	{{ template "metadata_encoder" (metadataEncodeDecodeData . "*trlr") }}
+	{{ template "metadata_encoder" (metadataEncodeDecodeData . "(*trlr)") }}
 {{- end }}
 	return {{ if .ResultRef }}resp{{ else }}nil{{ end }}, nil
 }

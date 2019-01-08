@@ -633,9 +633,12 @@ func collectMessages(an codegen.AttributeAnalyzer, sd *ServiceData, seen map[str
 //
 // svr param indicates that the convert data is generated for server side.
 func buildRequestConvertData(requestAn, payloadAn codegen.AttributeAnalyzer, md []*MetadataData, e *expr.GRPCEndpointExpr, sd *ServiceData, svr bool) *ConvertData {
-	// Server-side: No need to build convert data if method payload is empty
-	// since server doesn't need to convert incoming message/metadata to payload.
-	if (svr && !needInit(e.MethodExpr.Payload.Type)) ||
+	// Server-side: No need to build convert data if request message is empty
+	// and the number of request metadata fields to decode is less than two.
+	// If the number of metadata is at least two, the method payload must be
+	// an object type (otherwise DSL validations would have failed) which needs
+	// initialization.
+	if (svr && (isEmpty(e.Request.Type) && len(md) < 2)) ||
 		// Client-side: No need to build convert data if streaming payload since
 		// all attributes in method payload is encoded into request metadata.
 		(!svr && e.MethodExpr.IsPayloadStreaming()) {
@@ -647,13 +650,15 @@ func buildRequestConvertData(requestAn, payloadAn codegen.AttributeAnalyzer, md 
 	)
 
 	if svr {
-		fn := func(data *InitData) *InitData {
+		// server side
+		var (
+			data        *InitData
+			validations *ValidationData
+		)
+		{
+			data = buildInitData(requestAn, payloadAn, "message", "payload", false, sd)
+			validations = sd.ValidationFor(protoBufMessageName(requestAn.Attribute(), sd.Scope))
 			data.Description = fmt.Sprintf("%s builds the payload of the %q endpoint of the %q service from the gRPC request type.", data.Name, e.Name(), svc.Name)
-			if e.MethodExpr.StreamingPayload.Type != expr.Empty {
-				// If payload streaming, remove the unary message type from the list
-				// of constructor args
-				data.Args = []*InitArgData{}
-			}
 			for _, m := range md {
 				// pass the metadata as arguments to payload constructor in server
 				data.Args = append(data.Args, &InitArgData{
@@ -668,20 +673,33 @@ func buildRequestConvertData(requestAn, payloadAn codegen.AttributeAnalyzer, md 
 					Example:   m.Example,
 				})
 			}
-			return data
 		}
-		return buildConvertData(requestAn, payloadAn, "message", "payload", false, sd, fn)
+		return &ConvertData{
+			SrcName:    requestAn.Name(true),
+			SrcRef:     requestAn.Ref(true),
+			TgtName:    payloadAn.Name(true),
+			TgtRef:     payloadAn.Ref(true),
+			Init:       data,
+			Validation: validations,
+		}
 	}
-	fn := func(data *InitData) *InitData {
+
+	// client side
+
+	var (
+		data *InitData
+	)
+	{
+		data = buildInitData(payloadAn, requestAn, "payload", "message", true, sd)
 		data.Description = fmt.Sprintf("%s builds the gRPC request type from the payload of the %q endpoint of the %q service.", data.Name, e.Name(), svc.Name)
-		if e.MethodExpr.StreamingPayload.Type != expr.Empty {
-			// If payload streaming, remove the unary message type from the list
-			// of constructor args
-			data.Args = []*InitArgData{}
-		}
-		return data
 	}
-	return buildConvertData(payloadAn, requestAn, "payload", "message", true, sd, fn)
+	return &ConvertData{
+		SrcName: payloadAn.Name(true),
+		SrcRef:  payloadAn.Ref(true),
+		TgtName: requestAn.Name(true),
+		TgtRef:  requestAn.Ref(true),
+		Init:    data,
+	}
 }
 
 // buildResponseConvertData builds the convert data for the server and client
@@ -693,7 +711,7 @@ func buildRequestConvertData(requestAn, payloadAn codegen.AttributeAnalyzer, md 
 //
 // svr param indicates that the convert data is generated for server side.
 func buildResponseConvertData(responseAn, resultAn codegen.AttributeAnalyzer, hdrs, trlrs []*MetadataData, e *expr.GRPCEndpointExpr, sd *ServiceData, svr bool) *ConvertData {
-	if e.MethodExpr.IsStreaming() || !needInit(e.MethodExpr.Result.Type) {
+	if e.MethodExpr.IsStreaming() {
 		return nil
 	}
 
@@ -702,13 +720,31 @@ func buildResponseConvertData(responseAn, resultAn codegen.AttributeAnalyzer, hd
 	)
 
 	if svr {
-		fn := func(data *InitData) *InitData {
+		// server side
+
+		var (
+			data *InitData
+		)
+		{
+			data = buildInitData(resultAn, responseAn, "result", "message", true, sd)
 			data.Description = fmt.Sprintf("%s builds the gRPC response type from the result of the %q endpoint of the %q service.", data.Name, e.Name(), svc.Name)
-			return data
 		}
-		return buildConvertData(resultAn, responseAn, "result", "message", true, sd, fn)
+		return &ConvertData{
+			SrcName: resultAn.Name(true),
+			SrcRef:  resultAn.Ref(true),
+			TgtName: responseAn.Name(true),
+			TgtRef:  responseAn.Ref(true),
+			Init:    data,
+		}
 	}
-	fn := func(data *InitData) *InitData {
+
+	// client side
+
+	var (
+		data *InitData
+	)
+	{
+		data = buildInitData(responseAn, resultAn, "message", "result", false, sd)
 		data.Description = fmt.Sprintf("%s builds the result type of the %q endpoint of the %q service from the gRPC response type.", data.Name, e.Name(), svc.Name)
 		for _, m := range hdrs {
 			// pass the headers as arguments to result constructor in client
@@ -738,12 +774,18 @@ func buildResponseConvertData(responseAn, resultAn codegen.AttributeAnalyzer, hd
 				Example:   m.Example,
 			})
 		}
-		return data
 	}
-	return buildConvertData(responseAn, resultAn, "message", "result", false, sd, fn)
+	return &ConvertData{
+		SrcName:    responseAn.Name(true),
+		SrcRef:     responseAn.Ref(true),
+		TgtName:    resultAn.Name(true),
+		TgtRef:     resultAn.Ref(true),
+		Init:       data,
+		Validation: sd.ValidationFor(protoBufMessageName(responseAn.Attribute(), sd.Scope)),
+	}
 }
 
-// buildConvertData builds the transformation code to convert source to target.
+// buildInitData builds the transformation code to convert source to target.
 //
 // source, target are the source and target attribute analyzer used in the
 // transformation
@@ -755,75 +797,47 @@ func buildResponseConvertData(responseAn, resultAn codegen.AttributeAnalyzer, hd
 //
 // sd is the ServiceData
 //
-// fn is a function to further configure the constructor InitData
-// (i.e. for adding metadata (if any) as args)
-//
-func buildConvertData(source, target codegen.AttributeAnalyzer, sourceVar, targetVar string, proto bool, sd *ServiceData, fn func(*InitData) *InitData) *ConvertData {
+func buildInitData(source, target codegen.AttributeAnalyzer, sourceVar, targetVar string, proto bool, sd *ServiceData) *InitData {
 	var (
-		data       *InitData
-		validation *ValidationData
-
-		srcAtt  = source.Attribute()
-		tgtAtt  = target.Attribute()
-		srcName = source.Name(true)
-		srcRef  = source.Ref(true)
-		tgtName = target.Name(true)
-		tgtRef  = target.Ref(true)
+		name     string
+		isStruct bool
+		code     string
+		helpers  []*codegen.TransformFunctionData
+		args     []*InitArgData
+		err      error
 	)
 	{
-		if !proto {
-			validation = sd.ValidationFor(protoBufMessageName(srcAtt, sd.Service.Scope))
+		isStruct = expr.IsObject(target.Attribute().Type)
+		n := target.Name(false)
+		if !isStruct {
+			// If target is array, map, or primitive the name will be suffixed with
+			// the definition (e.g int, []string, map[int]string) which is incorrect.
+			n = source.Name(false)
 		}
-		var (
-			name     string
-			isStruct bool
-			code     string
-			helpers  []*codegen.TransformFunctionData
-			args     []*InitArgData
-			err      error
-		)
-		{
-			n := target.Name(false)
-			if expr.IsPrimitive(tgtAtt.Type) {
-				n = source.Name(false)
-			}
-			name = "New" + n
-			isStruct = expr.IsObject(tgtAtt.Type)
-			code, helpers, err = protoBufTransform(source, target, sourceVar, targetVar, proto)
-			if err != nil {
-				fmt.Println(err.Error()) // TBD validate DSL so errors are not possible
-				return nil
-			}
-			sd.TransformHelpers = codegen.AppendHelpers(sd.TransformHelpers, helpers)
-			args = []*InitArgData{
-				&InitArgData{
-					Name:     sourceVar,
-					Ref:      sourceVar,
-					TypeName: srcName,
-					TypeRef:  srcRef,
-					Example:  srcAtt.Example(expr.Root.API.Random()),
-				},
-			}
+		name = "New" + n
+		code, helpers, err = protoBufTransform(source, target, sourceVar, targetVar, proto)
+		if err != nil {
+			fmt.Println(err.Error()) // TBD validate DSL so errors are not possible
+			return nil
 		}
-		data = &InitData{
-			Name:           name,
-			ReturnVarName:  targetVar,
-			ReturnTypeRef:  tgtRef,
-			ReturnIsStruct: isStruct,
-			Code:           code,
-			Args:           args,
-		}
-		if data != nil && fn != nil {
-			data = fn(data)
+		sd.TransformHelpers = codegen.AppendHelpers(sd.TransformHelpers, helpers)
+		args = []*InitArgData{
+			&InitArgData{
+				Name:     sourceVar,
+				Ref:      sourceVar,
+				TypeName: source.Name(true),
+				TypeRef:  source.Ref(true),
+				Example:  source.Attribute().Example(expr.Root.API.Random()),
+			},
 		}
 	}
-	return &ConvertData{
-		SrcName:    srcName,
-		SrcRef:     srcRef,
-		TgtName:    tgtName,
-		TgtRef:     tgtRef,
-		Init:       data,
-		Validation: validation,
+	return &InitData{
+		Name:           name,
+		ReturnVarName:  targetVar,
+		ReturnTypeRef:  target.Ref(true),
+		ReturnIsStruct: isStruct,
+		Code:           code,
+		Args:           args,
 	}
 }
 
@@ -894,12 +908,25 @@ func buildStreamData(e *expr.GRPCEndpointExpr, sd *ServiceData, svr bool) *Strea
 			if e.MethodExpr.Result.Type != expr.Empty {
 				sendName = md.ServerStream.SendName
 				sendRef = ed.ResultRef
-				sendType = buildConvertData(resultAn, responseAn, resVar, "v", true, sd, nil)
+				sendType = &ConvertData{
+					SrcName: resultAn.Name(true),
+					SrcRef:  resultAn.Ref(true),
+					TgtName: responseAn.Name(true),
+					TgtRef:  responseAn.Ref(true),
+					Init:    buildInitData(resultAn, responseAn, resVar, "v", true, sd),
+				}
 			}
 			if e.MethodExpr.StreamingPayload.Type != expr.Empty {
 				recvName = md.ServerStream.RecvName
 				recvRef = spayloadAn.Ref(true)
-				recvType = buildConvertData(requestAn, spayloadAn, "v", "spayload", false, sd, nil)
+				recvType = &ConvertData{
+					SrcName:    requestAn.Name(true),
+					SrcRef:     requestAn.Ref(true),
+					TgtName:    spayloadAn.Name(true),
+					TgtRef:     spayloadAn.Ref(true),
+					Init:       buildInitData(requestAn, spayloadAn, "v", "spayload", false, sd),
+					Validation: sd.ValidationFor(protoBufMessageName(requestAn.Attribute(), sd.Scope)),
+				}
 			}
 			mustClose = md.ServerStream.MustClose
 		} else {
@@ -910,12 +937,25 @@ func buildStreamData(e *expr.GRPCEndpointExpr, sd *ServiceData, svr bool) *Strea
 			if e.MethodExpr.StreamingPayload.Type != expr.Empty {
 				sendName = md.ClientStream.SendName
 				sendRef = spayloadAn.Ref(true)
-				sendType = buildConvertData(spayloadAn, requestAn, "spayload", "v", true, sd, nil)
+				sendType = &ConvertData{
+					SrcName: spayloadAn.Name(true),
+					SrcRef:  spayloadAn.Ref(true),
+					TgtName: requestAn.Name(true),
+					TgtRef:  requestAn.Ref(true),
+					Init:    buildInitData(spayloadAn, requestAn, "spayload", "v", true, sd),
+				}
 			}
 			if e.MethodExpr.Result.Type != expr.Empty {
 				recvName = md.ClientStream.RecvName
 				recvRef = ed.ResultRef
-				recvType = buildConvertData(responseAn, resultAn, "v", resVar, false, sd, nil)
+				recvType = &ConvertData{
+					SrcName:    responseAn.Name(true),
+					SrcRef:     responseAn.Ref(true),
+					TgtName:    resultAn.Name(true),
+					TgtRef:     resultAn.Ref(true),
+					Init:       buildInitData(responseAn, resultAn, "v", resVar, false, sd),
+					Validation: sd.ValidationFor(protoBufMessageName(responseAn.Attribute(), sd.Scope)),
+				}
 			}
 			mustClose = md.ClientStream.MustClose
 		}
@@ -1007,13 +1047,18 @@ func resultAnalyzer(e *expr.GRPCEndpointExpr, sd *ServiceData) codegen.Attribute
 
 // needInit returns false if given type is empty.
 func needInit(dt expr.DataType) bool {
+	return !isEmpty(dt)
+}
+
+// isEmpty returns true if given type is empty.
+func isEmpty(dt expr.DataType) bool {
 	if dt == expr.Empty {
-		return false
+		return true
 	}
 	if o := expr.AsObject(dt); o != nil && len(*o) == 0 {
-		return false
+		return true
 	}
-	return true
+	return false
 }
 
 // input: InitData
@@ -1068,7 +1113,7 @@ func (s *{{ .VarName }}) {{ .RecvName }}() ({{ .RecvRef }}, error) {
 	}
 {{- if and .Endpoint.Method.ViewedResult (eq .Type "client") }}
 	proj := {{ .RecvConvert.Init.Name }}({{ range .RecvConvert.Init.Args }}{{ .Name }}, {{ end }})
-	vres := {{ if not .Endpoint.Method.ViewedResult.IsCollection }}&{{ end }}{{ .Endpoint.Method.ViewedResult.FullName }}{Projected: proj, View: s.view}
+	vres := {{ if not .Endpoint.Method.ViewedResult.IsCollection }}&{{ end }}{{ .Endpoint.Method.ViewedResult.FullName }}{Projected: proj, View: {{ if .Endpoint.Method.ViewedResult.ViewName }}"{{ .Endpoint.Method.ViewedResult.ViewName }}"{{ else }}s.view{{ end }} }
 	return {{ .Endpoint.ServicePkgName }}.{{ .Endpoint.Method.ViewedResult.ResultInit.Name }}(vres), nil
 {{- else }}
 	return {{ .RecvConvert.Init.Name }}({{ range .RecvConvert.Init.Args }}{{ .Name }}, {{ end }}), nil
